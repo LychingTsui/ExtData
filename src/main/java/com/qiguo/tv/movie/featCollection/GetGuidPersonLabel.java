@@ -1,0 +1,74 @@
+package com.qiguo.tv.movie.featCollection;
+
+import java.io.IOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.util.GenericOptionsParser;
+
+
+public class GetGuidPersonLabel {
+	public static class MapClass extends Mapper<LongWritable, Text, Text,NullWritable>{
+		
+		protected void map(LongWritable key, Text val, Context context) throws IOException,
+		InterruptedException{
+			String[] valStr = val.toString().split("\t",-1);
+			for(String st : valStr){
+				if(st.startsWith("person")){
+					if(st.length() > 6){
+						String[] pers = st.substring(6).split(",");  
+						for(String p : pers){
+							context.write(new Text(p.split(":")[0]), NullWritable.get());						
+						}
+						continue;
+					}				
+				}
+				if(st.startsWith("label")){
+					if(st.length() > 5){
+						String[] labs = st.substring(5).split(",");
+						for(String lab : labs){
+							context.write(new Text(lab.split(":")[0]), NullWritable.get());
+						}
+					}
+				}
+			}
+		}
+		
+	}
+	public static class ReduceClass extends Reducer<Text, NullWritable, Text, NullWritable>{
+		protected void reduce(Text key, Iterable<NullWritable> val, Context context) throws IOException, 
+		InterruptedException {
+			context.write(key, NullWritable.get());
+		}
+	}
+	public static void main(String[] args)throws IOException,
+	InterruptedException,ClassNotFoundException{
+		Configuration conf = new Configuration();
+		conf.set("mapred.reduce.parallel.copies", "25");
+		String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
+		Job job = Job.getInstance(conf,"features");
+		job.setJarByClass(GetGuidPersonLabel.class);
+		
+		MultipleInputs.addInputPath(job, new Path(otherArgs[0]), TextInputFormat.class,
+				MapClass.class);
+		job.setReducerClass(ReduceClass.class);
+		
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(NullWritable.class);
+		
+		FileOutputFormat.setOutputPath(job, new Path(otherArgs[1]));
+		System.exit(job.waitForCompletion(true)? 0:1);
+	}
+	
+	
+	
+}
